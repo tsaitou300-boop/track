@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>　
-
+<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -473,6 +472,29 @@
     if (rows[idx]) { rows[idx][field] = val; autoSave(); }
   }
 
+  function updateGame(idx, val) {
+    const v = parseInt(val);
+    if (isNaN(v)) return;
+    rows[idx].game = v;
+    recalcAll();
+    renderTable(); calcEV(); autoSave();
+  }
+
+  function recalcAll() {
+    rows.sort((a, b) => a.game - b.game);
+    startGame = rows[0].game;
+    let cashCount = 0;
+    rows.forEach((r, i) => {
+      if (i === 0) { r.diff = null; r.avg = null; r.cumCost = 0; return; }
+      r.diff = r.game - rows[i-1].game;
+      const totalDiff = r.game - startGame;
+      if (!r.isBall) cashCount++;
+      r.cumCost = r.isBall ? rows[i-1].cumCost : cashCount * costPerEntry;
+      r.avg = cashCount > 0 ? (totalDiff / cashCount).toFixed(1) : '---';
+    });
+    ballRows = rows.filter((r, i) => i > 0 && r.isBall).length;
+  }
+
   // ── テーブル描画 ──
   function renderTable() {
     const tbody = document.getElementById('tbl-body');
@@ -482,9 +504,13 @@
     }
     tbody.innerHTML = rows.map((r, i) => {
       const costStr = i===0 ? '---' : (r.isBall ? '持ち玉' : r.cumCost.toLocaleString()+'円');
-      const avgStr = i===0 ? '<span class="start-lbl">START</span>' : r.avg;
+      const avgStr = i===0 ? 'START' : r.avg;
+      const diffStr = i===0 ? '---' : r.diff;
       return `<tr>
-        <td class="hl">${r.game}</td><td>${i===0?'---':r.diff}</td><td>${avgStr}</td><td>${costStr}</td>
+        <td><input value="${r.game}" onchange="updateGame(${i},this.value)" inputmode="numeric" style="width:56px;${i===0?'color:#E87C00;font-weight:500;':''}"></td>
+        <td style="color:#aaa;font-size:12px;">${diffStr}</td>
+        <td style="${i===0?'color:#E87C00;font-weight:500;font-size:12px;':'font-size:12px;'}">${avgStr}</td>
+        <td style="font-size:12px;">${costStr}</td>
         <td><input value="${r.zu}" onchange="updateField(${i},'zu',this.value)" placeholder="図柄"></td>
         <td><input value="${r.dama}" onchange="updateField(${i},'dama',this.value)" placeholder="玉数" inputmode="numeric"></td>
         <td><input class="wide" value="${r.note}" onchange="updateField(${i},'note',this.value)" placeholder="備考"></td>
