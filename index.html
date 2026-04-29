@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a1a">
+  <title>パチンコ回転数トラッカー</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background: #1a1a1a; color: #fff; font-size: 16px; overscroll-behavior: none; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── ヘッダー ── */
+    .header { background: #2a2a2a; padding: 12px 16px; border-bottom: 0.5px solid #444; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    .header-title { font-size: 17px; font-weight: 500; color: #fff; }
+    .header-sub { font-size: 12px; color: #aaa; margin-top: 2px; }
+    .header-btn { background: none; border: 0.5px solid #555; border-radius: 8px; color: #aaa; font-size: 13px; padding: 6px 12px; cursor: pointer; min-height: 36px; }
+    .header-btn:active { background: #333; }
+
+    /* ── 記録一覧ビュー ── */
+    .list-view { background: #1e1e1e; min-height: 100vh; }
+    .list-header { background: #2a2a2a; padding: 14px 16px; border-bottom: 0.5px solid #444; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    .list-header-title { font-size: 18px; font-weight: 500; }
+    .btn-new { background: #E87C00; color: #fff; border: none; border-radius: 10px; padding: 10px 18px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px; }
+    .btn-new:active { opacity: 0.8; }
+    .session-item { background: #252525; border-bottom: 0.5px solid #333; padding: 14px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .session-item:active { background: #2e2e2e; }
+    .session-left .s-title { font-size: 15px; font-weight: 500; color: #fff; }
+    .session-left .s-date { font-size: 12px; color: #888; margin-top: 3px; }
+    .session-right { text-align: right; }
+    .session-right .s-games { font-size: 15px; font-weight: 500; color: #fff; }
+    .session-right .s-cost { font-size: 12px; color: #888; margin-top: 3px; }
+    .profit-badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 20px; margin-top: 4px; }
+    .profit-plus { background: #1a3a2a; color: #4ade80; }
+    .profit-minus { background: #3a1a1a; color: #f87171; }
+    .empty-state { text-align: center; padding: 60px 20px; color: #666; font-size: 15px; line-height: 1.8; }
+    .session-del-btn { background: #3a1a1a; color: #f87171; border: none; border-radius: 8px; font-size: 12px; padding: 6px 10px; cursor: pointer; margin-left: 8px; min-height: 36px; }
+
+    /* ── テーブル ── */
+    .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+    thead tr { background: #E87C00; }
+    thead th { padding: 9px 6px; text-align: center; color: #fff; font-weight: 500; font-size: 12px; white-space: nowrap; }
+    tbody tr { border-bottom: 0.5px solid #333; }
+    tbody tr:nth-child(odd) { background: #252525; }
+    tbody tr:nth-child(even) { background: #1e1e1e; }
+    tbody td { padding: 8px 6px; text-align: center; color: #e0e0e0; font-size: 13px; white-space: nowrap; }
+    tbody td.start-lbl { color: #E87C00; font-weight: 500; }
+    tbody td.hl { color: #fff; font-weight: 500; }
+    tbody td input { background: #333; border: 0.5px solid #555; border-radius: 6px; padding: 5px 6px; color: #fff; font-size: 13px; width: 64px; outline: none; text-align: center; -webkit-appearance: none; }
+    tbody td input.wide { width: 84px; }
+
+    /* ── ボトム ── */
+    .bottom { background: #2a2a2a; border-top: 0.5px solid #444; padding: 12px 16px; }
+    .label-sm { font-size: 12px; color: #aaa; margin-bottom: 5px; }
+    .toggle-wrap { display: flex; border: 0.5px solid #555; border-radius: 8px; overflow: hidden; }
+    .toggle-btn { flex: 1; padding: 9px 10px; background: #3a3a3a; color: #aaa; font-size: 13px; cursor: pointer; border: none; text-align: center; min-height: 44px; }
+    .toggle-btn.active { background: #555; color: #fff; }
+    .summary-box { background: #534AB7; border-radius: 10px; padding: 11px 14px; }
+    .s-row { font-size: 13px; color: #ddd; margin-bottom: 4px; }
+    .s-row:last-child { margin-bottom: 0; }
+    .s-val { color: #fff; font-weight: 500; }
+    .border-box { background: #1a3a2a; border: 0.5px solid #2a6a4a; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .border-box .b-title { font-size: 12px; color: #4ade80; font-weight: 500; margin-bottom: 8px; }
+    .border-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .border-field { display: flex; flex-direction: column; gap: 4px; }
+    .border-field label { font-size: 11px; color: #aaa; }
+    .border-field-inner { display: flex; align-items: center; gap: 3px; }
+    .border-field-inner input { background: #333; border: 0.5px solid #2a6a4a; border-radius: 6px; padding: 6px 6px; color: #fff; font-size: 13px; outline: none; width: 100%; min-width: 0; text-align: center; -webkit-appearance: none; }
+    .border-field-inner .unit { font-size: 10px; color: #888; white-space: nowrap; flex-shrink: 0; }
+    .ev-display { background: #0f2a1a; border-radius: 8px; padding: 8px 10px; }
+    .ev-row { display: flex; justify-content: space-between; font-size: 12px; color: #ccc; padding: 2px 0; }
+    .ev-val { font-weight: 500; }
+    .ev-val.plus { color: #4ade80; }
+    .ev-val.minus { color: #f87171; }
+    .input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .input-row input { flex: 1; background: #333; border: 0.5px solid #555; border-radius: 8px; padding: 11px 12px; color: #fff; font-size: 16px; outline: none; -webkit-appearance: none; }
+    .input-row input::placeholder { color: #666; }
+    .btn-row { display: flex; gap: 6px; }
+    .btn { flex: 1; padding: 13px 4px; border: none; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; min-height: 48px; }
+    .btn-ok { background: #E87C00; color: #fff; }
+    .btn-start { background: #22c55e; color: #fff; }
+    .btn-del { background: #ef4444; color: #fff; }
+    .btn-end { background: #534AB7; color: #fff; }
+    .btn:active { opacity: 0.8; }
+    .controls-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .ctrl-block { flex: 1; }
+
+    /* ── 結果 ── */
+    .result-overlay { background: #1e1e1e; padding: 16px; }
+    .result-title { font-size: 18px; font-weight: 500; color: #fff; margin-bottom: 14px; text-align: center; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .r-card { background: #2a2a2a; border-radius: 10px; padding: 12px; text-align: center; }
+    .r-label { font-size: 11px; color: #aaa; margin-bottom: 4px; }
+    .r-val { font-size: 20px; font-weight: 500; color: #fff; }
+    .r-val.plus { color: #4ade80; }
+    .r-val.minus { color: #f87171; }
+    .r-sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .result-section { background: #2a2a2a; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+    .result-section-title { font-size: 13px; color: #E87C00; font-weight: 500; margin-bottom: 8px; }
+    .r-row { display: flex; justify-content: space-between; font-size: 13px; color: #ccc; padding: 4px 0; border-bottom: 0.5px solid #333; }
+    .r-row:last-child { border-bottom: none; }
+    .r-row span { color: #fff; font-weight: 500; }
+    .r-row span.plus { color: #4ade80; }
+    .r-row span.minus { color: #f87171; }
+    .ev-section { background: #1a3a2a; border: 0.5px solid #2a6a4a; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+    .ev-section-title { font-size: 13px; color: #4ade80; font-weight: 500; margin-bottom: 8px; }
+    .btn-back { background: #444; color: #fff; border: none; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 8px; min-height: 48px; }
+    .btn-back:active { opacity: 0.8; }
+    .btn-save { background: #E87C00; color: #fff; border: none; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 500; cursor: pointer; width: 100%; margin-bottom: 8px; min-height: 48px; }
+    .btn-save:active { opacity: 0.8; }
+    .save-msg { text-align: center; font-size: 13px; color: #4ade80; margin-bottom: 8px; display: none; }
+
+    /* ── タイトル入力モーダル ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: #2a2a2a; border-radius: 14px; padding: 20px; width: 100%; max-width: 340px; }
+    .modal-title { font-size: 16px; font-weight: 500; margin-bottom: 12px; }
+    .modal input { width: 100%; background: #333; border: 0.5px solid #555; border-radius: 8px; padding: 11px 12px; color: #fff; font-size: 15px; outline: none; margin-bottom: 14px; }
+    .modal-btns { display: flex; gap: 8px; }
+    .modal-btns button { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px; }
+    .modal-ok { background: #E87C00; color: #fff; }
+    .modal-cancel { background: #444; color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- タイトル入力モーダル -->
+<div class="modal-overlay" id="modal" style="display:none;">
+  <div class="modal">
+    <div class="modal-title">台名・メモを入力</div>
+    <input type="text" id="modal-input" placeholder="例: 123番台 海物語" maxlength="30">
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="modal-ok" onclick="confirmModal()">開始</button>
+    </div>
+  </div>
+</div>
+
+<!-- 記録一覧ビュー -->
+<div id="view-list" class="view active list-view">
+  <div class="list-header">
+    <div class="list-header-title">パチンコ記録</div>
+    <button class="btn-new" onclick="openModal()">＋ 新規</button>
+  </div>
+  <div id="session-list"></div>
+</div>
+
+<!-- 入力ビュー -->
+<div id="view-input" class="view">
+  <div class="header">
+    <div>
+      <div class="header-title" id="input-title">新規データ</div>
+      <div class="header-sub" id="input-sub"></div>
+    </div>
+    <button class="header-btn" onclick="goList()">一覧</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>ゲーム数</th><th>差分</th><th>平均</th><th>投資額</th><th>当たり図柄</th><th>出玉</th><th>備考</th></tr></thead>
+      <tbody id="tbl-body"><tr><td colspan="7" style="color:#666;padding:20px;text-align:center;">スタートを押して記録開始</td></tr></tbody>
+    </table>
+  </div>
+  <div class="bottom">
+    <div class="controls-row">
+      <div class="ctrl-block">
+        <div class="label-sm">遊技方法</div>
+        <div class="toggle-wrap">
+          <div class="toggle-btn active" id="btn-cash" onclick="setMode('cash')">現金</div>
+          <div class="toggle-btn" id="btn-ball" onclick="setMode('ball')">持ち玉</div>
+        </div>
+      </div>
+      <div class="ctrl-block">
+        <div class="label-sm">1回あたりの投資額</div>
+        <div class="toggle-wrap">
+          <div class="toggle-btn active" id="btn-500" onclick="setCost(500)">500円</div>
+          <div class="toggle-btn" id="btn-1000" onclick="setCost(1000)">1000円</div>
+        </div>
+      </div>
+    </div>
+    <div class="border-box">
+      <div class="b-title">ボーダー設定</div>
+      <div class="border-fields">
+        <div class="border-field">
+          <label>ボーダー回転数</label>
+          <div class="border-field-inner">
+            <input type="number" id="border-val" placeholder="19.0" step="0.1" inputmode="decimal" oninput="calcEV()">
+            <span class="unit">回/千円</span>
+          </div>
+        </div>
+        <div class="border-field">
+          <label>賞球数</label>
+          <div class="border-field-inner">
+            <input type="number" id="prize-balls" value="3" step="1" inputmode="numeric" oninput="calcEV()">
+            <span class="unit">玉/回</span>
+          </div>
+        </div>
+        <div class="border-field">
+          <label>換金レート</label>
+          <div class="border-field-inner">
+            <input type="number" id="exchange-rate" value="4" step="0.1" inputmode="decimal" oninput="calcEV()">
+            <span class="unit">円/玉</span>
+          </div>
+        </div>
+      </div>
+      <div class="ev-display" id="ev-display" style="display:none;">
+        <div class="ev-row">自分の回転数 <span class="ev-val" id="ev-my-rate">---</span></div>
+        <div class="ev-row">ボーダーとの差 <span class="ev-val" id="ev-diff">---</span></div>
+        <div class="ev-row">1000円あたりの期待値 <span class="ev-val" id="ev-per1k">---</span></div>
+        <div class="ev-row">現在の総期待値 <span class="ev-val" id="ev-total">---</span></div>
+      </div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div class="summary-box">
+        <div class="s-row">持ち玉比率: <span class="s-val" id="s-ratio">0%</span></div>
+        <div class="s-row">総ゲーム数: <span class="s-val" id="s-total">0回</span></div>
+        <div class="s-row">総投資額: <span class="s-val" id="s-ev">0円</span></div>
+      </div>
+    </div>
+    <div class="label-sm">ゲーム数を入力</div>
+    <div class="input-row">
+      <input type="number" id="game-input" placeholder="例: 257" min="0" inputmode="numeric">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ok" onclick="addRow()">決定</button>
+      <button class="btn btn-start" onclick="startNew()">スタート</button>
+      <button class="btn btn-del" onclick="deleteLastRow()">一行削除</button>
+      <button class="btn btn-end" onclick="showResult()">終了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 結果ビュー -->
+<div id="view-result" class="view">
+  <div class="header">
+    <div><div class="header-title">遊技結果</div></div>
+    <button class="header-btn" onclick="goList()">一覧</button>
+  </div>
+  <div class="result-overlay">
+    <div class="result-grid">
+      <div class="r-card"><div class="r-label">総ゲーム数</div><div class="r-val" id="r-games">0</div><div class="r-sub">回</div></div>
+      <div class="r-card"><div class="r-label">総投資額</div><div class="r-val" id="r-cost">0</div><div class="r-sub">円</div></div>
+      <div class="r-card"><div class="r-label">総出玉</div><div class="r-val" id="r-balls">0</div><div class="r-sub">玉</div></div>
+      <div class="r-card"><div class="r-label">当たり回数</div><div class="r-val" id="r-hits">0</div><div class="r-sub">回</div></div>
+    </div>
+    <div class="result-section">
+      <div class="result-section-title">回転率</div>
+      <div class="r-row">平均回転数（1000円あたり）<span id="r-per1k">---</span></div>
+      <div class="r-row">1回転あたりコスト<span id="r-per-spin">---</span></div>
+    </div>
+    <div class="result-section">
+      <div class="result-section-title">収支</div>
+      <div class="r-row">総出玉の換金額（目安）<span id="r-exchange">---</span></div>
+      <div class="r-row">差引損益<span id="r-profit"></span></div>
+      <div class="r-row">持ち玉比率<span id="r-ball-ratio">---</span></div>
+    </div>
+    <div class="ev-section" id="r-ev-section" style="display:none;">
+      <div class="ev-section-title">ボーダー比較・期待値</div>
+      <div class="r-row">ボーダー回転数<span id="r-border">---</span></div>
+      <div class="r-row">自分の回転数<span id="r-myrate">---</span></div>
+      <div class="r-row">ボーダーとの差<span id="r-borderdiff"></span></div>
+      <div class="r-row">1000円あたりの期待値<span id="r-ev1k"></span></div>
+      <div class="r-row">総投資額に対する期待値<span id="r-evtotal"></span></div>
+    </div>
+    <div class="result-section" id="r-notes-section" style="display:none;">
+      <div class="result-section-title">備考まとめ</div>
+      <div id="r-notes-list"></div>
+    </div>
+    <div id="save-msg" class="save-msg">✓ 保存しました！</div>
+    <button class="btn-save" onclick="saveSession()">この記録を保存する</button>
+    <button class="btn-back" onclick="backToInput()">入力に戻る</button>
+  </div>
+</div>
+
+<script>
+  let rows = [], started = false, startGame = 0, mode = 'cash', costPerEntry = 500, ballRows = 0;
+  let sessions = [];
+  let currentSessionId = null;
+  let pendingTitle = '';
+
+  // ── ストレージ ──
+  function loadSessions() {
+    try { sessions = JSON.parse(localStorage.getItem('pachinko-sessions') || '[]'); } catch(e) { sessions = []; }
+    renderList();
+  }
+  function saveSessions() {
+    try { localStorage.setItem('pachinko-sessions', JSON.stringify(sessions)); } catch(e) {}
+  }
+
+  // ── ビュー切替 ──
+  function showView(id) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo(0, 0);
+  }
+  function goList() { showView('view-list'); renderList(); }
+
+  // ── モーダル ──
+  function openModal() {
+    document.getElementById('modal-input').value = '';
+    document.getElementById('modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('modal-input').focus(), 100);
+  }
+  function closeModal() { document.getElementById('modal').style.display = 'none'; }
+  function confirmModal() {
+    pendingTitle = document.getElementById('modal-input').value.trim() || '新規データ';
+    closeModal();
+    startSession();
+  }
+  document.getElementById('modal-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmModal(); });
+
+  // ── 一覧 ──
+  function renderList() {
+    const el = document.getElementById('session-list');
+    if (sessions.length === 0) {
+      el.innerHTML = '<div class="empty-state">記録がありません<br>「＋ 新規」で記録を始めましょう</div>';
+      return;
+    }
+    el.innerHTML = [...sessions].reverse().map(s => {
+      const profit = s.profit || 0;
+      const badge = `<span class="profit-badge ${profit >= 0 ? 'profit-plus' : 'profit-minus'}">${profit >= 0 ? '+' : ''}${profit.toLocaleString()}円</span>`;
+      return `<div class="session-item" onclick="openSession('${s.id}')">
+        <div class="session-left">
+          <div class="s-title">${s.title}</div>
+          <div class="s-date">${s.date}</div>
+        </div>
+        <div class="session-right">
+          <div class="s-games">${(s.totalGames||0).toLocaleString()}回転</div>
+          <div class="s-cost">${(s.totalCost||0).toLocaleString()}円投資</div>
+          ${badge}
+          <div><button class="session-del-btn" onclick="event.stopPropagation();deleteSession('${s.id}')">削除</button></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function deleteSession(id) {
+    if (!confirm('この記録を削除しますか？')) return;
+    sessions = sessions.filter(s => s.id !== id);
+    saveSessions();
+    renderList();
+  }
+
+  // ── セッション操作 ──
+  function startSession() {
+    rows = []; started = false; startGame = 0; mode = 'cash'; costPerEntry = 500; ballRows = 0;
+    currentSessionId = 'sess-' + Date.now();
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ja-JP') + ' ' + now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('input-title').textContent = pendingTitle;
+    document.getElementById('input-sub').textContent = dateStr;
+    document.getElementById('btn-cash').classList.add('active'); document.getElementById('btn-ball').classList.remove('active');
+    document.getElementById('btn-500').classList.add('active'); document.getElementById('btn-1000').classList.remove('active');
+    document.getElementById('border-val').value = '';
+    document.getElementById('ev-display').style.display = 'none';
+    renderTable(); updateSummary(0,0,0);
+    showView('view-input');
+  }
+
+  function openSession(id) {
+    const s = sessions.find(x => x.id === id);
+    if (!s) return;
+    rows = s.rows || []; started = s.started || false; startGame = s.startGame || 0;
+    mode = s.mode || 'cash'; costPerEntry = s.costPerEntry || 500; ballRows = s.ballRows || 0;
+    currentSessionId = id;
+    document.getElementById('input-title').textContent = s.title;
+    document.getElementById('input-sub').textContent = s.date;
+    document.getElementById('btn-cash').classList.toggle('active', mode==='cash');
+    document.getElementById('btn-ball').classList.toggle('active', mode==='ball');
+    document.getElementById('btn-500').classList.toggle('active', costPerEntry===500);
+    document.getElementById('btn-1000').classList.toggle('active', costPerEntry===1000);
+    if (s.border) document.getElementById('border-val').value = s.border;
+    renderTable(); calcEV();
+    showView('view-input');
+  }
+
+  function autoSave() {
+    const idx = sessions.findIndex(s => s.id === currentSessionId);
+    const tg = rows.length > 1 ? rows[rows.length-1].game - startGame : 0;
+    const tc = rows.length > 1 ? rows[rows.length-1].cumCost : 0;
+    const totalBalls = rows.reduce((s,r) => s+(parseInt(r.dama)||0), 0);
+    const rateVal = parseFloat(document.getElementById('exchange-rate').value) || 4;
+    const profit = Math.round(totalBalls * rateVal) - tc;
+    const obj = {
+      id: currentSessionId,
+      title: document.getElementById('input-title').textContent,
+      date: document.getElementById('input-sub').textContent,
+      rows, started, startGame, mode, costPerEntry, ballRows,
+      border: document.getElementById('border-val').value,
+      totalGames: tg, totalCost: tc, profit
+    };
+    if (idx >= 0) sessions[idx] = obj; else sessions.push(obj);
+    saveSessions();
+  }
+
+  // ── コントロール ──
+  function setMode(m) {
+    mode = m;
+    document.getElementById('btn-cash').classList.toggle('active', m==='cash');
+    document.getElementById('btn-ball').classList.toggle('active', m==='ball');
+  }
+  function setCost(c) {
+    costPerEntry = c;
+    document.getElementById('btn-500').classList.toggle('active', c===500);
+    document.getElementById('btn-1000').classList.toggle('active', c===1000);
+  }
+
+  // ── 期待値 ──
+  function getMyRate() {
+    if (!started || rows.length < 2) return null;
+    const tg = rows[rows.length-1].game - startGame;
+    const tc = rows[rows.length-1].cumCost;
+    if (tc <= 0) return null;
+    return tg / tc * 1000;
+  }
+  function calcEV() {
+    const border = parseFloat(document.getElementById('border-val').value);
+    const prizeBalls = parseFloat(document.getElementById('prize-balls').value) || 3;
+    const rate = parseFloat(document.getElementById('exchange-rate').value) || 4;
+    const evDisplay = document.getElementById('ev-display');
+    const myRate = getMyRate();
+    if (!border || !myRate) { evDisplay.style.display = 'none'; return; }
+    evDisplay.style.display = 'block';
+    const diff = myRate - border;
+    const evPer1k = diff * prizeBalls * rate;
+    const totalCost = rows[rows.length-1].cumCost;
+    const evTotal = evPer1k * (totalCost / 1000);
+    const set = (id, val, sign) => {
+      const el = document.getElementById(id); el.textContent = val;
+      el.className = 'ev-val ' + (sign >= 0 ? 'plus' : 'minus');
+    };
+    set('ev-my-rate', myRate.toFixed(1)+' 回/千円', diff);
+    set('ev-diff', (diff>=0?'+':'')+diff.toFixed(1)+' 回', diff);
+    set('ev-per1k', (evPer1k>=0?'+':'')+Math.round(evPer1k)+' 円', evPer1k);
+    set('ev-total', (evTotal>=0?'+':'')+Math.round(evTotal).toLocaleString()+' 円', evTotal);
+  }
+
+  // ── 入力 ──
+  function startNew() {
+    const val = parseInt(document.getElementById('game-input').value);
+    if (isNaN(val)) { alert('開始ゲーム数を入力してください'); return; }
+    rows = [{ game: val, diff: null, avg: null, cost: 0, cumCost: 0, isBall: false, zu: '', dama: '', note: '' }];
+    startGame = val; started = true; ballRows = 0;
+    document.getElementById('game-input').value = '';
+    renderTable(); autoSave();
+  }
+  function addRow() {
+    if (!started) { alert('スタートを押してください'); return; }
+    const val = parseInt(document.getElementById('game-input').value);
+    if (isNaN(val) || val === 0) { alert('ゲーム数を入力してください'); return; }
+    const prev = rows[rows.length-1].game;
+    if (val <= prev) { alert('前のゲーム数より大きい値を入力してください'); return; }
+    const diff = val - prev, totalDiff = val - startGame;
+    const isBall = mode === 'ball';
+    if (isBall) ballRows++;
+    const cashCount = rows.filter(r => !r.isBall && r.cost > 0).length + (isBall ? 0 : 1);
+    const cumCost = isBall ? rows[rows.length-1].cumCost : cashCount * costPerEntry;
+    const avgPerCash = cashCount > 0 ? (totalDiff / cashCount).toFixed(1) : '---';
+    rows.push({ game: val, diff, avg: avgPerCash, cost: isBall ? 0 : costPerEntry, cumCost, isBall, zu: '', dama: '', note: '' });
+    document.getElementById('game-input').value = '';
+    renderTable(); calcEV(); autoSave();
+  }
+  function deleteLastRow() {
+    if (rows.length <= 1) { rows = []; started = false; renderTable(); autoSave(); return; }
+    const last = rows.pop();
+    if (last.isBall) ballRows--;
+    renderTable(); calcEV(); autoSave();
+  }
+  function updateField(idx, field, val) {
+    if (rows[idx]) { rows[idx][field] = val; autoSave(); }
+  }
+
+  // ── テーブル描画 ──
+  function renderTable() {
+    const tbody = document.getElementById('tbl-body');
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="color:#666;padding:20px;text-align:center;">スタートを押して記録開始</td></tr>';
+      updateSummary(0,0,0); return;
+    }
+    tbody.innerHTML = rows.map((r, i) => {
+      const costStr = i===0 ? '---' : (r.isBall ? '持ち玉' : r.cumCost.toLocaleString()+'円');
+      const avgStr = i===0 ? '<span class="start-lbl">START</span>' : r.avg;
+      return `<tr>
+        <td class="hl">${r.game}</td><td>${i===0?'---':r.diff}</td><td>${avgStr}</td><td>${costStr}</td>
+        <td><input value="${r.zu}" onchange="updateField(${i},'zu',this.value)" placeholder="図柄"></td>
+        <td><input value="${r.dama}" onchange="updateField(${i},'dama',this.value)" placeholder="玉数" inputmode="numeric"></td>
+        <td><input class="wide" value="${r.note}" onchange="updateField(${i},'note',this.value)" placeholder="備考"></td>
+      </tr>`;
+    }).join('');
+    const tg = rows.length>1 ? rows[rows.length-1].game-startGame : 0;
+    const tc = rows.length>1 ? rows[rows.length-1].cumCost : 0;
+    const br = rows.length>1 ? Math.round(ballRows/(rows.length-1)*100) : 0;
+    updateSummary(br, tg, tc);
+  }
+  function updateSummary(br, tg, tc) {
+    document.getElementById('s-ratio').textContent = br+'%';
+    document.getElementById('s-total').textContent = tg.toLocaleString()+'回';
+    document.getElementById('s-ev').textContent = tc.toLocaleString()+'円';
+  }
+
+  // ── 結果 ──
+  function showResult() {
+    if (!started || rows.length < 2) { alert('データがありません'); return; }
+    const tg = rows[rows.length-1].game - startGame;
+    const tc = rows[rows.length-1].cumCost;
+    const br = Math.round(ballRows/(rows.length-1)*100);
+    const hits = rows.filter((r,i) => i>0 && r.zu.trim()!=='');
+    const totalBalls = rows.reduce((s,r) => s+(parseInt(r.dama)||0), 0);
+    const per1k = tc>0 ? (tg/tc*1000).toFixed(1) : '---';
+    const perSpin = tg>0 ? (tc/tg).toFixed(1) : '---';
+    const rateVal = parseFloat(document.getElementById('exchange-rate').value)||4;
+    const exchange = Math.round(totalBalls*rateVal);
+    const profit = exchange - tc;
+    document.getElementById('r-games').textContent = tg.toLocaleString();
+    document.getElementById('r-cost').textContent = tc.toLocaleString();
+    document.getElementById('r-balls').textContent = totalBalls.toLocaleString();
+    document.getElementById('r-hits').textContent = hits.length;
+    document.getElementById('r-per1k').textContent = per1k+' 回';
+    document.getElementById('r-per-spin').textContent = perSpin+' 円';
+    document.getElementById('r-exchange').textContent = exchange.toLocaleString()+' 円';
+    const pe = document.getElementById('r-profit');
+    pe.textContent = (profit>=0?'+':'')+profit.toLocaleString()+' 円';
+    pe.className = profit>=0?'plus':'minus';
+    document.getElementById('r-ball-ratio').textContent = br+'%';
+    const border = parseFloat(document.getElementById('border-val').value);
+    const prizeBalls = parseFloat(document.getElementById('prize-balls').value)||3;
+    const evSec = document.getElementById('r-ev-section');
+    if (border && tc>0) {
+      evSec.style.display = 'block';
+      const mr = tg/tc*1000, diff = mr-border, evPer1k = diff*prizeBalls*rateVal, evT = evPer1k*(tc/1000);
+      document.getElementById('r-border').textContent = border.toFixed(1)+' 回/千円';
+      document.getElementById('r-myrate').textContent = mr.toFixed(1)+' 回/千円';
+      const de = document.getElementById('r-borderdiff'); de.textContent=(diff>=0?'+':'')+diff.toFixed(1)+' 回'; de.className=diff>=0?'plus':'minus';
+      const e1 = document.getElementById('r-ev1k'); e1.textContent=(evPer1k>=0?'+':'')+Math.round(evPer1k)+' 円'; e1.className=evPer1k>=0?'plus':'minus';
+      const et = document.getElementById('r-evtotal'); et.textContent=(evT>=0?'+':'')+Math.round(evT).toLocaleString()+' 円'; et.className=evT>=0?'plus':'minus';
+    } else { evSec.style.display='none'; }
+    const nr = rows.filter(r => r.note.trim()!=='');
+    const ns = document.getElementById('r-notes-section');
+    if (nr.length>0) { ns.style.display='block'; document.getElementById('r-notes-list').innerHTML = nr.map(r=>`<div class="r-row">${r.game}G<span>${r.note}</span></div>`).join(''); }
+    else { ns.style.display='none'; }
+    document.getElementById('save-msg').style.display = 'none';
+    showView('view-result');
+  }
+
+  function saveSession() {
+    autoSave();
+    const msg = document.getElementById('save-msg');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display='none'; }, 2000);
+  }
+  function backToInput() { showView('view-input'); }
+
+  // ── 初期化 ──
+  loadSessions();
+</script>
+</body>
+</html>
