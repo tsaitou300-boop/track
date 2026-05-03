@@ -215,8 +215,10 @@
     <div style="margin-bottom:10px;">
       <div class="summary-box">
         <div class="s-row">持ち玉比率: <span class="s-val" id="s-ratio">0%</span></div>
-        <div class="s-row">総ゲーム数: <span class="s-val" id="s-total">0回</span></div>
+        <div class="s-row">累計回転数: <span class="s-val" id="s-total">0回</span></div>
         <div class="s-row">総投資額: <span class="s-val" id="s-ev">0円</span></div>
+        <div class="s-row">回転数/千円: <span class="s-val" id="s-rate">---</span></div>
+        <div class="s-row">当たり回数: <span class="s-val" id="s-hits">0回</span></div>
       </div>
     </div>
     <div class="label-sm">ゲーム数を入力</div>
@@ -464,6 +466,24 @@
   function startNew() {
     const val = parseInt(document.getElementById('game-input').value);
     if (isNaN(val)) { alert('開始ゲーム数を入力してください'); return; }
+    if (started) {
+      // 途中の0スタート → 区切り行として追加（上書きしない）
+      const prev = rows[rows.length-1].game;
+      const isBall = mode === 'ball';
+      if (isBall) ballRows++;
+      const cashCount = rows.filter(r => !r.isBall && r.cost > 0).length + (isBall ? 0 : 1);
+      const cumCost = isBall ? rows[rows.length-1].cumCost : cashCount * costPerEntry;
+      const totalDiff = val - startGame;
+      const avgPerCash = cashCount > 0 ? (totalDiff / cashCount).toFixed(1) : '---';
+      rows.push({
+        game: val, diff: val - prev, avg: avgPerCash,
+        cost: isBall ? 0 : costPerEntry, cumCost, isBall,
+        zu: '', dama: '', note: '🔄0スタート'
+      });
+      document.getElementById('game-input').value = '';
+      renderTable(); calcEV(); autoSave();
+      return;
+    }
     rows = [{ game: val, diff: null, avg: null, cost: 0, cumCost: 0, isBall: false, zu: '', dama: '', note: '' }];
     startGame = val; started = true; ballRows = 0;
     document.getElementById('game-input').value = '';
@@ -548,6 +568,10 @@
     document.getElementById('s-ratio').textContent = br+'%';
     document.getElementById('s-total').textContent = tg.toLocaleString()+'回';
     document.getElementById('s-ev').textContent = tc.toLocaleString()+'円';
+    const rate = tc > 0 ? (tg / tc * 1000).toFixed(1)+' 回' : '---';
+    document.getElementById('s-rate').textContent = rate;
+    const hits = rows.filter((r,i) => i > 0 && r.zu.trim() !== '').length;
+    document.getElementById('s-hits').textContent = hits+'回';
   }
 
   // ── 結果 ──
